@@ -1,3 +1,6 @@
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![MELPA](http://melpa.org/packages/helm-eca-badge.svg)](http://melpa.org/#/helm-eca)
+
 # helm-eca
 
 A tiny [Helm](https://github.com/emacs-helm/helm) frontend for
