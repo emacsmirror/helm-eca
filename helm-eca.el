@@ -18,7 +18,10 @@
 
 ;; Provides `helm-eca`:
 ;; - Source "ECA chats": all chat buffers across all sessions, displayed as:
-;; WORKSPACE • CHAT-TITLE [USAGE]
+;; LABEL • CHAT-TITLE [USAGE]
+;; where LABEL is the workspace root basename or, for chats driven by Fleet
+;; (buffers named `*eca:ROLE:SELECTOR...*'), the Fleet identity.  See
+;; `helm-eca-chat-label-function'.
 ;; - Source "ECA workspaces": all sessions (workspace roots)
 ;; This code uses some ECA internals (such as `eca--sessions` and `eca--session-chats`)
 ;; because eca-emacs doesn't currently expose a stable "list chats across sessions"
@@ -48,8 +51,28 @@
           (const :tag "Full path" full))
   :group 'helm-eca)
 
+(defcustom helm-eca-chat-label-function #'helm-eca-chat-label-auto
+  "Function returning the leading label of an \"ECA chats\" candidate.
+
+It is called with two arguments, the ECA SESSION and the chat BUFFER,
+and must return a string.  The string may carry a `face' text property;
+when it does not, `shadow' is applied.
+
+Built-in choices:
+- `helm-eca-chat-label-auto': the Fleet identity when BUFFER is named
+  like `*eca:ROLE:SELECTOR...*', otherwise the workspace label.
+- `helm-eca-chat-label-workspace': always the workspace label (basename
+  of the session's workspace roots, see `helm-eca-workspace-display').
+- `helm-eca-chat-label-buffer-name': always the plain buffer name."
+  :type '(choice
+          (function-item :tag "Fleet identity, else workspace" helm-eca-chat-label-auto)
+          (function-item :tag "Workspace" helm-eca-chat-label-workspace)
+          (function-item :tag "Buffer name" helm-eca-chat-label-buffer-name)
+          (function :tag "Custom function (SESSION BUFFER)"))
+  :group 'helm-eca)
+
 (defcustom helm-eca-separator " • "
-  "Separator between workspace label and chat title."
+  "Separator between chat label and chat title."
   :type 'string
   :group 'helm-eca)
 
@@ -67,6 +90,21 @@
   "Helm buffer name used by `helm-eca`."
   :type 'string
   :group 'helm-eca)
+
+(defface helm-eca-fleet-label
+  '((t :inherit (bold shadow)))
+  "Face for the Fleet identity label of Fleet-driven ECA chats."
+  :group 'helm-eca)
+
+(defconst helm-eca-fleet-buffer-name-regexp "\\`\\*eca:\\(.+\\)\\*\\'"
+  "Regexp matching chat buffers named by Fleet.
+
+Fleet names its ECA chat buffers `*eca:ROLE:SELECTOR[:TASK][:SHORT-ID]*',
+e.g. `*eca:commander:master*' or `*eca:operator:master/fleet:my-task*'.
+Group 1 captures everything between the `*eca:' prefix and the trailing
+`*'; the grammar inside is deliberately not enforced so that it keeps
+working if Fleet extends it.  ECA's own chat buffers are named
+`<eca-chat[...]:...>' and never match.")
 
 (declare-function eca-workspaces "eca" ())
 
@@ -119,6 +157,46 @@
              (helm-eca--session-workspace-folders session)
              ","))
 
+(defun helm-eca-fleet-label (name)
+  "Return the Fleet identity encoded in chat buffer NAME, or nil.
+
+NAME is a buffer name string.  For `*eca:commander:master*' this
+returns \"commander:master\"; for names not produced by Fleet (see
+`helm-eca-fleet-buffer-name-regexp') it returns nil."
+  (when (and (stringp name)
+             (string-match helm-eca-fleet-buffer-name-regexp name))
+    (match-string 1 name)))
+
+(defun helm-eca-chat-label-workspace (session _buffer)
+  "Return the workspace label of SESSION for a chat candidate."
+  (propertize (helm-eca-session-label session) 'face 'shadow))
+
+(defun helm-eca-chat-label-buffer-name (_session buffer)
+  "Return the name of chat BUFFER for a chat candidate."
+  (propertize (buffer-name buffer) 'face 'shadow))
+
+(defun helm-eca-chat-label-auto (session buffer)
+  "Return the Fleet identity of chat BUFFER, else SESSION's workspace label.
+
+Fleet-driven chats (see `helm-eca-fleet-label') are labelled with the
+face `helm-eca-fleet-label'; all other chats fall back to
+`helm-eca-chat-label-workspace'."
+  (if-let ((fleet (helm-eca-fleet-label (buffer-name buffer))))
+      (propertize fleet 'face 'helm-eca-fleet-label)
+    (helm-eca-chat-label-workspace session buffer)))
+
+(defun helm-eca-chat-label (session buffer)
+  "Return the leading label for chat BUFFER of SESSION.
+
+Delegates to `helm-eca-chat-label-function' and applies the `shadow'
+face when the returned string carries none."
+  (let ((label (funcall helm-eca-chat-label-function session buffer)))
+    (unless (stringp label)
+      (setq label (format "%s" label)))
+    (if (or (string-empty-p label) (get-text-property 0 'face label))
+        label
+      (propertize label 'face 'shadow))))
+
 (defun helm-eca-chat-title (buffer)
   "Return a human label for chat BUFFER."
   (with-current-buffer buffer
@@ -170,13 +248,13 @@
 
 (defun helm-eca-chat-candidate (session buffer)
   "Build a Helm candidate (DISPLAY . BUFFER) for BUFFER in SESSION."
-  (let* ((ws (helm-eca-session-label session))
+  (let* ((label (helm-eca-chat-label session buffer))
          (title (helm-eca-chat-title buffer))
          (usage (helm-eca-chat-usage buffer))
          (loading (helm-eca-chat-loading-p buffer))
          (prefix (if loading helm-eca-loading-indicator "")))
     (cons (concat prefix
-                  (propertize ws 'face 'shadow)
+                  label
                   helm-eca-separator
                   title
                   (when usage
