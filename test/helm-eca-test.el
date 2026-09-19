@@ -22,59 +22,47 @@ The buffer is killed afterwards.  NAME must not already be in use."
         (funcall fn buf)
       (kill-buffer buf))))
 
-;;;; helm-eca-fleet-label: buffer name -> Fleet identity
+;;;; ECA default chat buffer names
 
-(ert-deftest helm-eca-fleet-label-commander ()
-  (should (equal (helm-eca-fleet-label "*eca:commander:master*")
-                 "commander:master")))
+(ert-deftest helm-eca-default-chat-buffer-name-p-standard ()
+  (should (helm-eca--default-chat-buffer-name-p
+           "<eca-chat[7]:~:main>")))
 
-(ert-deftest helm-eca-fleet-label-lieutenant ()
-  (should (equal (helm-eca-fleet-label "*eca:lieutenant:master/openclaw*")
-                 "lieutenant:master/openclaw")))
+(ert-deftest helm-eca-default-chat-buffer-name-p-duplicate ()
+  (should (helm-eca--default-chat-buffer-name-p
+           "<eca-chat[7]:~:main><2>")))
 
-(ert-deftest helm-eca-fleet-label-operator-task ()
-  (should (equal (helm-eca-fleet-label "*eca:operator:master/fleet:my-task*")
-                 "operator:master/fleet:my-task")))
+(ert-deftest helm-eca-default-chat-buffer-name-p-closed ()
+  (should (helm-eca--default-chat-buffer-name-p
+           "<eca-chat[7]:~:main>:closed")))
 
-(ert-deftest helm-eca-fleet-label-detached-short-id ()
-  (should (equal (helm-eca-fleet-label "*eca:operator:master/fleet:my-task:a1b2c3*")
-                 "operator:master/fleet:my-task:a1b2c3")))
+(ert-deftest helm-eca-default-chat-buffer-name-p-rejects-renamed ()
+  (dolist (name '("*eca:commander:master*"
+                  "eca-chat[7]:~:main"
+                  "<eca-chat[7]:~:main> renamed"
+                  "<eca-chat[7]:~:main><x>"))
+    (should-not (helm-eca--default-chat-buffer-name-p name))))
 
-(ert-deftest helm-eca-fleet-label-lenient-grammar ()
-  "Anything between `*eca:' and the trailing `*' is accepted verbatim."
-  (should (equal (helm-eca-fleet-label "*eca:future role/with spaces*")
-                 "future role/with spaces")))
+(ert-deftest helm-eca-default-chat-buffer-name-p-non-string ()
+  (should-not (helm-eca--default-chat-buffer-name-p nil))
+  (should-not (helm-eca--default-chat-buffer-name-p 'symbol)))
 
-(ert-deftest helm-eca-fleet-label-rejects-regular-eca-chat ()
-  (should-not (helm-eca-fleet-label "<eca-chat[1]:~:main>"))
-  (should-not (helm-eca-fleet-label "<eca-chat:~:main>:closed")))
+(ert-deftest helm-eca-default-chat-buffer-name-p-varied-fields ()
+  (dolist (name '("<eca-chat[project/name]:workspace:chat-123>"
+                  "<eca-chat[project with spaces]:~:main><12>"
+                  "<eca-chat[project]:session:chat>:closed"))
+    (should (helm-eca--default-chat-buffer-name-p name))))
 
-(ert-deftest helm-eca-fleet-label-rejects-near-misses ()
-  (should-not (helm-eca-fleet-label "*eca:*"))
-  (should-not (helm-eca-fleet-label "*eca*"))
-  (should-not (helm-eca-fleet-label "eca:commander:master"))
-  (should-not (helm-eca-fleet-label "*eca:commander:master"))
-  (should-not (helm-eca-fleet-label "x*eca:commander:master*"))
-  (should-not (helm-eca-fleet-label "*scratch*")))
-
-(ert-deftest helm-eca-fleet-label-non-string ()
-  (should-not (helm-eca-fleet-label nil))
-  (should-not (helm-eca-fleet-label 'symbol)))
+(ert-deftest helm-eca-default-chat-buffer-name-p-rejects-malformed ()
+  (dolist (name '("<eca-chat:~:main>:closed"
+                  "<eca-chat[]:~:main>"
+                  "<eca-chat[project]:session>"
+                  "<eca-chat[project]:session:chat>:closed-more"))
+    (should-not (helm-eca--default-chat-buffer-name-p name))))
 
 ;;;; Label functions on buffers (session stubbed)
 
-(ert-deftest helm-eca-chat-label-auto-uses-fleet-identity ()
-  (helm-eca-test--with-buffer-named
-   "*eca:lieutenant:master/fleet*"
-   (lambda (buf)
-     (cl-letf (((symbol-function 'helm-eca-session-label)
-                (lambda (_session) "ws")))
-       (let ((label (helm-eca-chat-label-auto 'fake-session buf)))
-         (should (equal label "lieutenant:master/fleet"))
-         (should (eq (get-text-property 0 'face label)
-                     'helm-eca-fleet-label)))))))
-
-(ert-deftest helm-eca-chat-label-auto-falls-back-to-workspace ()
+(ert-deftest helm-eca-chat-label-auto-uses-workspace-for-default-name ()
   (helm-eca-test--with-buffer-named
    "<eca-chat[7]:~:main>"
    (lambda (buf)
@@ -83,6 +71,25 @@ The buffer is killed afterwards.  NAME must not already be in use."
        (let ((label (helm-eca-chat-label-auto 'fake-session buf)))
          (should (equal label "myproject"))
          (should (eq (get-text-property 0 'face label) 'shadow)))))))
+
+(ert-deftest helm-eca-chat-label-auto-uses-raw-renamed-name ()
+  (helm-eca-test--with-buffer-named
+   "*eca:commander:master*"
+   (lambda (buf)
+     (cl-letf (((symbol-function 'helm-eca-session-label)
+                (lambda (_session) "myproject")))
+       (let ((label (helm-eca-chat-label-auto 'fake-session buf)))
+         (should (equal label "*eca:commander:master*"))
+         (should (eq (get-text-property 0 'face label) 'shadow)))))))
+
+(ert-deftest helm-eca-chat-label-auto-uses-arbitrary-raw-name ()
+  (helm-eca-test--with-buffer-named
+   "Renamed by a tool"
+   (lambda (buf)
+     (cl-letf (((symbol-function 'helm-eca-session-label)
+                (lambda (_session) "myproject")))
+       (should (equal (helm-eca-chat-label-auto 'fake-session buf)
+                      "Renamed by a tool"))))))
 
 (ert-deftest helm-eca-chat-label-workspace-ignores-buffer-name ()
   (helm-eca-test--with-buffer-named
@@ -114,11 +121,14 @@ The buffer is killed afterwards.  NAME must not already be in use."
 
 (ert-deftest helm-eca-chat-label-keeps-existing-face ()
   (helm-eca-test--with-buffer-named
-   "*eca:commander:master*"
+   "*renamed-chat*"
    (lambda (buf)
-     (let ((helm-eca-chat-label-function #'helm-eca-chat-label-auto))
-       (should (eq (get-text-property 0 'face (helm-eca-chat-label 'S buf))
-                   'helm-eca-fleet-label))))))
+     (let ((helm-eca-chat-label-function
+            (lambda (_session _buffer)
+              (propertize "custom" 'face 'bold))))
+       (should (eq (get-text-property 0 'face
+                                       (helm-eca-chat-label 'S buf))
+                   'bold))))))
 
 (provide 'helm-eca-test)
 ;;; helm-eca-test.el ends here

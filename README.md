@@ -71,28 +71,26 @@ M-x helm-eca
 You'll see:
 
 - **ECA chats**: candidates look like `LABEL • CHAT TITLE [USAGE]`, where
-  `LABEL` is the workspace root (basename by default) or, for Fleet-driven
-  chats, the Fleet identity (see below)
+  `LABEL` is the workspace root (basename by default) for normally named chats
+  and the raw buffer name for chats renamed by a user or tool
 - **ECA workspaces**: candidates show workspace roots and session status
 
-### Fleet sessions
+### Renamed chat buffers
 
-Fleet (the user's Emacs agent supervisor) drives ECA sessions whose
-workspace roots are opaque UUID directories, so the workspace basename says
-nothing about *which* agent a chat belongs to. Fleet does, however, name its
-chat buffers `*eca:ROLE:SELECTOR[:TASK][:SHORT-ID]*`. By default `helm-eca`
-recognises that pattern and shows the buffer name stripped of the `*eca:`
-prefix and trailing `*` as the label, e.g.:
+ECA normally names chat buffers like `<eca-chat[PROJECT]:SESSION:CHAT-ID>`.
+By default, `helm-eca` uses the workspace label for those generated names.
+When a user or tool deliberately renames a chat buffer, `helm-eca` shows the
+raw buffer name unchanged instead of stripping or tidying any prefix. For
+example, tools that rename buffers, such as Fleet, can make names like these
+visible as-is:
 
 ```text
-commander:master • …
-lieutenant:master/openclaw • …
-operator:master/fleet:my-task • …
+*eca:commander:master* • …
+*eca:operator:master/fleet:my-task* • …
 ```
 
-Fleet labels use the `helm-eca-fleet-label` face (bold `shadow` by default)
-so they stand out from plain workspace labels. Regular ECA chats (buffers named
-`<eca-chat[…]:…>`) are unaffected and keep showing the workspace label.
+Use `helm-eca-chat-label-buffer-name` when you want raw buffer names for every
+chat, or `helm-eca-chat-label-workspace` when you always want workspace labels.
 
 Tip: If you already run `helm-mode`, note that `eca-chat-select` uses
 `completing-read`, so it may already help if all you need is single-session chat
@@ -103,12 +101,11 @@ sessions and adds extra actions.
 
 These variables are intended for light customization:
 
-- `helm-eca-chat-label-function` – function `(SESSION BUFFER) → string` producing
-  the leading label of a chat candidate. Built-in choices:
-  - `helm-eca-chat-label-auto` (default) – Fleet identity for `*eca:…*` buffers,
-    otherwise the workspace label
-  - `helm-eca-chat-label-workspace` – always the workspace label (pre-Fleet behaviour)
-  - `helm-eca-chat-label-buffer-name` – always the plain buffer name
+- `helm-eca-chat-label-function` – function `(SESSION BUFFER) → string` producing the leading label of a chat candidate. Built-in choices:
+  - `helm-eca-chat-label-auto` (default) – workspace label for ECA's default
+    generated names, otherwise the raw buffer name
+  - `helm-eca-chat-label-workspace` – always the workspace label
+  - `helm-eca-chat-label-buffer-name` – always the raw buffer name
 - `helm-eca-workspace-display` – how workspace roots are displayed (`basename`, `abbrev`, `full`)
 - `helm-eca-separator` – separator between chat label and chat title
 - `helm-eca-show-usage` – show token/cost usage when available
