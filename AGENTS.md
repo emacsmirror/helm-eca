@@ -5,7 +5,7 @@
   emacs -Q --batch -L . -f batch-byte-compile helm-eca.el
 - Doc/lint (built-in Checkdoc):
   emacs -Q --batch -l checkdoc --eval '(checkdoc-file "helm-eca.el")'
-- Tests: none in this repo. If/when ERT tests exist (e.g. `test/helm-eca-test.el`):
+- Tests: ERT, in `test/helm-eca-test.el` (pure label logic; no live ECA needed):
   emacs -Q --batch -L . -l test/helm-eca-test.el -f ert-run-tests-batch-and-exit
   emacs -Q --batch -L . -l test/helm-eca-test.el --eval '(ert-run-tests-batch-and-exit "^helm-eca-")'  # single/regex
 
